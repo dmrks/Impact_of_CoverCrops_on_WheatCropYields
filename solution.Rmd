@@ -1,0 +1,151 @@
+---
+title: "Crop Yield"
+output: html_notebook
+---
+
+# Import libraries
+```{r, message=FALSE}
+library(cobalt)
+library(WeightIt)
+library(lmtest)
+library(sandwich)
+```
+
+# Task 1
+```{r}
+# Load file as dataframe
+farm_df <- read.csv("farms.csv")
+```
+
+# Task 2
+```{r}
+# Inspect dataframe
+head(farm_df)
+```
+
+# Task 3
+```{r}
+# Balance plot for the average age
+bal.plot(
+  x = cover_10 ~ age_avg, #formula
+  data = farm_df, #dataset
+  var.name = "age_avg", #variable
+  colors = c("#E69F00", "#009E73") #set fill colors
+)
+```
+
+# Task 4
+```{r}
+# Balance plot for geographic region
+bal.plot(
+  x = cover_10 ~ region, #formula
+  data = farm_df, #dataset
+  var.name = "region", #variable
+  colors = c("#E69F00", "#009E73") #set fill colors
+)
+```
+
+# Task 5
+```{r}
+# Balance table to show SMD and variance ratio of between groups
+bal.tab(
+  #formula of all variables
+  cover_10 ~ region + total_avg + age_avg + experience_avg + insurance_avg + easement_p + conservation_till_avg + fertilizer_per_area,
+  #dataset
+  data = farm_df, 
+  #SMD for binary
+  binary = "std", 
+  #show variance ratios
+  disp.v.ratio = TRUE)
+```
+
+# Task 6
+```{r}
+# Calculate IPTW weights with initial propensity score model
+farm_iptw <- weightit(
+  #propensity model
+  cover_10 ~ region + total_avg + insurance_avg + fertilizer_per_area,
+  #dataset
+  data = farm_df,
+  #use IPTW
+  method = "ps",
+  #IPTW formulas for the ATE
+  estimand = "ATE"
+)
+```
+
+# Task 7
+```{r}
+# Love plot with threshold lines to show SMD balance before and after weighting
+love.plot(
+  farm_iptw, #weightit model
+  binary = "std", #use SMD for binary
+  thresholds = c(m = 0.1), #guidelines
+  colors = c("#E69F00", "#009E73") #set fill colors
+)
+```
+
+# Task 8
+```{r}
+# Re-calculate IPTW weights with updated propensity score model
+farm_iptw2 <- weightit(
+  #new model
+  cover_10 ~ region + total_avg + insurance_avg + age_avg + experience_avg + easement_p + conservation_till_avg,
+  #dataset
+  data = farm_df,
+  #IPTW weights
+  method = "ps",
+  #IPTW for ATE
+  estimand = "ATE"
+)
+```
+
+# Task 9
+```{r}
+# Plot Love plot of SMDs with threshold lines to show balance before and after IPTW procedure
+love.plot(
+  farm_iptw2, #weightit model
+  binary = "std", #use SMD for binary
+  thresholds = c(m = 0.1), #guidelines
+  colors = c("#E69F00", "#009E73") #set fill colors
+)
+```
+
+# Task 10
+```{r}
+# Balance plot of propensity scores before and after weighting
+bal.plot(
+  x = farm_iptw2, #model
+  var.name = "prop.score", #propensity scores
+  which = "both", #before and after
+  colors = c("#E69F00", "#009E73") #set fill colors
+)
+```
+
+# Task 11
+```{r}
+# Fit outcome regression model
+yield_mod <- glm(
+  #outcome model
+  formula = total_yield ~ cover_10 + region + total_avg + insurance_avg + age_avg + experience_avg + insurance_avg + easement_p + conservation_till_avg,
+  #dataset 
+  data = farm_df,
+  #IPTW weights
+  weights = farm_iptw2$weights 
+)
+```
+
+# Task 12
+```{r}
+# Estimate regression coefficients for weighted outcome model with robust standard errors
+coeftest(
+  yield_mod, #outcome model 
+  vcov. = vcovHC #robust standard errors
+)
+```
+
+# Task 13
+
+## Results Interpretation:
+
+Our estimate of the ATE is about 3.58. We estimate that when counties have at least 10% of farms with cover crops, average total yield of wheat increases by about 3.58 bushels per acre.
